@@ -1,36 +1,15 @@
-# { "Depends": "py-genlayer:latest" }
-"""
-ConditionOracle - a reusable GenLayer Intelligent Contract primitive.
-
-PURPOSE
-    Lets anyone register a real-world claim ("condition") together with a public
-    source URL and plain-language resolution criteria. Anyone can later trigger
-    resolution. Each validator independently fetches the page and asks an LLM
-    whether the criteria are met. Validators must agree on the verdict through
-    GenLayer's comparative equivalence principle before it is written on-chain.
-
-WHY IT IS USEFUL TO OTHER BUILDERS
-    Prediction markets, bounties, escrow, grants and DAO votes all need a
-    trustworthy "did X happen?" answer. This contract is that building block:
-    other contracts can call get_verdict(claim_id) and branch on the result.
-
-CONSENSUS DESIGN
-    - Non-deterministic block: fetch web page + LLM judgment.
-    - Output is normalized to JSON with a fixed verdict vocabulary
-      (TRUE / FALSE / INCONCLUSIVE) so validators compare a small, stable value.
-    - gl.eq_principle.prompt_comparative: the leader's verdict and each
-      validator's verdict must match; the free-text reasoning may differ.
-    - A claim resolves exactly once (status moves OPEN -> final), preventing
-      replays or flip-flopping.
-
-STATE
-    claims: TreeMap[id -> Claim]   next_id: counter
-"""
+# v0.2.16
+# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 import json
 from dataclasses import dataclass
 
 from genlayer import *
+
+# ConditionOracle: a reusable GenLayer primitive that resolves real-world claims.
+# Validators fetch a source URL, an LLM judges it against the criteria, and
+# consensus (prompt_comparative) must agree on the verdict before it is stored.
+# Other contracts can call get_verdict(claim_id) and branch on the result.
 
 VALID_VERDICTS = ("TRUE", "FALSE", "INCONCLUSIVE")
 MAX_PAGE_CHARS = 8000
@@ -43,7 +22,7 @@ class Claim:
     statement: str
     source_url: str
     criteria: str
-    status: str  # "OPEN" | "TRUE" | "FALSE" | "INCONCLUSIVE"
+    status: str
     reasoning: str
 
 
@@ -53,8 +32,6 @@ class ConditionOracle(gl.Contract):
 
     def __init__(self):
         self.next_id = u256(0)
-
-    # ------------------------------------------------------------------ writes
 
     @gl.public.write
     def create_claim(self, statement: str, source_url: str, criteria: str) -> int:
@@ -85,7 +62,6 @@ class ConditionOracle(gl.Contract):
         if claim.status != "OPEN":
             raise Exception("claim already resolved")
 
-        # Copy to locals: storage cannot be read inside the non-deterministic block.
         url = claim.source_url
         statement = claim.statement
         criteria = claim.criteria
@@ -139,8 +115,6 @@ Respond with ONLY valid JSON, no markdown:
         claim.reasoning = parsed["reasoning"]
         return claim.status
 
-    # ------------------------------------------------------------------- views
-
     @gl.public.view
     def get_verdict(self, claim_id: int) -> str:
         cid = u256(claim_id)
@@ -149,19 +123,21 @@ Respond with ONLY valid JSON, no markdown:
         return self.claims[cid].status
 
     @gl.public.view
-    def get_claim(self, claim_id: int) -> dict:
+    def get_claim(self, claim_id: int) -> str:
         cid = u256(claim_id)
         if cid not in self.claims:
             raise Exception("claim not found")
         c = self.claims[cid]
-        return {
-            "creator": c.creator.as_hex,
-            "statement": c.statement,
-            "source_url": c.source_url,
-            "criteria": c.criteria,
-            "status": c.status,
-            "reasoning": c.reasoning,
-        }
+        return json.dumps(
+            {
+                "creator": c.creator.as_hex,
+                "statement": c.statement,
+                "source_url": c.source_url,
+                "criteria": c.criteria,
+                "status": c.status,
+                "reasoning": c.reasoning,
+            }
+        )
 
     @gl.public.view
     def total_claims(self) -> int:

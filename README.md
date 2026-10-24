@@ -43,41 +43,48 @@ Prediction markets, bounties, escrow, grants and DAO votes all need a trustworth
 | Method | Description |
 |---|---|
 | `get_verdict(claim_id) -> str` | `OPEN`, `TRUE`, `FALSE` or `INCONCLUSIVE` |
-| `get_claim(claim_id) -> dict` | Full claim record including reasoning |
+| `get_claim(claim_id) -> str` | Full claim record as a JSON string, including reasoning |
 | `total_claims() -> int` | Number of claims created |
 
-## Using it from another contract
+## Using it from other contracts
 
-```python
-oracle = gl.get_contract_at(Address("0x...oracle address..."))
-verdict = oracle.view().get_verdict(0)
-if verdict == "TRUE":
-    # release funds, settle market, mark bounty complete...
-    pass
-```
+Other contracts can reference a deployed ConditionOracle by address and call `get_verdict(claim_id)`, then act on `"TRUE"`, `"FALSE"` or `"INCONCLUSIVE"` (release funds, settle a market, close a bounty, and so on).
 
 ## Testing in GenLayer Studio
 
-1. Open GenLayer Studio and paste `condition_oracle.py`.
-2. Deploy with no constructor arguments.
-3. Call `create_claim` with:
+1. Open GenLayer Studio and upload `condition_oracle.py`.
+2. Keep the two header lines at the top of the file exactly as they are (version and `Depends` line).
+3. Deploy with no constructor arguments.
+4. Call `create_claim` with:
    - `statement`: `The page describes GenLayer`
    - `source_url`: `https://www.genlayer.com`
    - `criteria`: `The page mentions GenLayer`
-4. Call `resolve` with `0`.
-5. Call `get_verdict` with `0`. Expected: `TRUE`.
-6. Call `get_claim` with `0` to see the stored reasoning.
-
-**Edge cases to try**
-
-- Resolve the same claim twice. Expected: error `claim already resolved`.
-- Use a criteria the page clearly fails. Expected: `FALSE`.
-- Use an unreachable or empty page. Expected: `INCONCLUSIVE`.
-- Pass a URL without `http(s)://`. Expected: error `source_url must be an http(s) URL`.
+5. Call `resolve` with `0`.
+6. Call `get_verdict` with `0`. Expected: `"TRUE"`.
+7. Call `get_claim` with `0` to see the stored reasoning.
 
 ## Test results
 
-Add your Studio screenshots here after testing.
+Deployed and tested in GenLayer Studio (Normal, Full Consensus mode).
+
+| Step | Result |
+|---|---|
+| Deploy | ACCEPTED |
+| `create_claim` (genlayer.com, "page mentions GenLayer") | FINALIZED |
+| `resolve(0)` | ACCEPTED |
+| `get_verdict(0)` | `"TRUE"` |
+| `get_claim(0)` | Status `TRUE`, with validator reasoning stored on-chain |
+
+Stored reasoning for the test claim: the page repeatedly references GenLayer, including headings and multiple mentions throughout the content.
+
+Screenshots of the deployment and results are in the `screenshots/` folder (add them if you have uploaded them).
+
+**Edge cases the contract handles**
+
+- Resolving the same claim twice: error `claim already resolved`.
+- Unknown claim id: error `claim not found`.
+- URL without `http(s)://`: error `source_url must be an http(s) URL`.
+- Unreadable or missing page content: verdict falls back to `INCONCLUSIVE`.
 
 ## Limitations and ideas
 
